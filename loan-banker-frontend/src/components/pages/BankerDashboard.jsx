@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
-import client from "../../api/client.jsx";
-import toast, { Toaster } from "react-hot-toast";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { CheckCircle, Clock, TrendingUp, Users, DollarSign, AlertTriangle } from "lucide-react";
+import SummaryCards from "../SummaryCards";
+import axios from "axios";
 
-const COLORS = ["#22c55e", "#facc15", "#ef4444"]; // green, yellow, red
+const client = axios.create({
+  baseURL: "http://localhost:8000",
+});
+
+const COLORS = ["#10b981", "#f59e0b", "#ef4444"];
 
 export default function BankerDashboard() {
   const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(false);
 
   const fetchApps = async () => {
     try {
@@ -15,44 +19,34 @@ export default function BankerDashboard() {
       setApplications(res.data);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to fetch applications.");
     }
   };
 
   useEffect(() => {
     fetchApps();
-    const interval = setInterval(fetchApps, 8000); // auto-refresh every 8s
+    const interval = setInterval(fetchApps, 8000);
     return () => clearInterval(interval);
   }, []);
 
   const handleVerify = async (id) => {
     try {
       await client.post(`/banker/applications/${id}/verify`, { is_verified: true });
-      toast.success("Application verified");
       fetchApps();
-    } catch {
-      toast.error("Verification failed");
-    }
+    } catch {}
   };
 
   const handleAnalyze = async (id) => {
     try {
       await client.post(`/banker/applications/${id}/analyze`);
-      toast.success("Analysis completed");
       fetchApps();
-    } catch {
-      toast.error("ML analysis failed");
-    }
+    } catch {}
   };
 
   const handleDecision = async (id, approved) => {
     try {
       await client.post(`/banker/applications/${id}/decision`, { approved });
-      toast.success(approved ? "Loan Approved" : "Loan Rejected");
       fetchApps();
-    } catch {
-      toast.error("Decision failed");
-    }
+    } catch {}
   };
 
   const summary = {
@@ -67,124 +61,162 @@ export default function BankerDashboard() {
   };
 
   return (
-    <div className="p-8">
-      <Toaster position="top-right" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-indigo-600 to-blue-600 p-2.5 rounded-xl shadow-lg">
+              <DollarSign className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
+                Loan Management
+              </h1>
+              <p className="text-sm text-slate-500">Banker Dashboard</p>
+            </div>
+          </div>
 
-      <h1 className="text-3xl font-bold mb-6 text-center">🏦 Banker Dashboard</h1>
+          <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium text-emerald-700">Live Updates</span>
+          </div>
+        </div>
+      </header>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-6 mb-10">
-        <SummaryCard title="Total Applications" value={summary.total} color="bg-blue-500" />
-        <SummaryCard title="Verified" value={summary.verified} color="bg-yellow-500" />
-        <SummaryCard title="Approved" value={summary.approved} color="bg-green-600" />
-      </div>
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Summary Section */}
+        <SummaryCards
+          stats={{
+            total: applications.length,
+            approved: applications.filter(a => a.approved).length,
+            pending: applications.filter(a => !a.approved && a.is_verified).length,
+            low: applications.filter(a => a.risk_label === "Low").length,
+            medium: applications.filter(a => a.risk_label === "Medium").length,
+            high: applications.filter(a => a.risk_label === "High").length,
+          }}
+        />
 
-      {/* Risk Pie Chart */}
-      <div className="bg-white p-6 rounded-xl shadow mb-10">
-        <h2 className="text-xl font-semibold mb-4">Risk Distribution</h2>
-        <ResponsiveContainer width="100%" height={250}>
-          <PieChart>
-            <Pie
-              data={summary.riskData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={80}
-              label
-            >
-              {summary.riskData.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
+        {/* Risk Chart */}
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 hover:shadow-xl transition-shadow duration-300">
+          <div className="flex items-center gap-2 mb-6">
+            <AlertTriangle className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-xl font-bold text-slate-800">Risk Distribution</h2>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={summary.riskData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {summary.riskData.map((_, i) => (
+                  <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
 
-      {/* Applications Table */}
-      <div className="bg-white p-6 rounded-xl shadow">
-        <h2 className="text-xl font-semibold mb-4">Applications</h2>
-        <table className="w-full border">
-          <thead>
-            <tr className="bg-gray-100 text-left text-sm">
-              <th className="p-2 border">ID</th>
-              <th className="p-2 border">Name</th>
-              <th className="p-2 border">Income</th>
-              <th className="p-2 border">Loan</th>
-              <th className="p-2 border">Risk</th>
-              <th className="p-2 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {applications.map((app) => (
-              <tr key={app.id} className="text-sm border-t">
-                <td className="p-2 border">{app.id}</td>
-                <td className="p-2 border">{app.full_name}</td>
-                <td className="p-2 border">₹{app.monthly_income}</td>
-                <td className="p-2 border">₹{app.requested_loan_amount}</td>
-                <td className="p-2 border">
-                  <span
-                    className={`px-2 py-1 rounded text-xs ${
-                      app.risk_label === "High"
-                        ? "bg-red-100 text-red-600"
-                        : app.risk_label === "Medium"
-                        ? "bg-yellow-100 text-yellow-600"
-                        : "bg-green-100 text-green-600"
-                    }`}
-                  >
-                    {app.risk_label || "—"}
-                  </span>
-                </td>
-                <td className="p-2 border space-x-2">
-                  {!app.is_verified && (
-                    <button
-                      onClick={() => handleVerify(app.id)}
-                      className="bg-yellow-500 text-white px-3 py-1 rounded text-xs"
-                    >
-                      Verify
-                    </button>
-                  )}
-                  {app.is_verified && !app.analysis_run && (
-                    <button
-                      onClick={() => handleAnalyze(app.id)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs"
-                    >
-                      Analyze
-                    </button>
-                  )}
-                  {app.analysis_run && (
-                    <button
-                      onClick={() => handleDecision(app.id, true)}
-                      className="bg-green-600 text-white px-3 py-1 rounded text-xs"
-                    >
-                      Approve
-                    </button>
-                  )}
-                  {app.analysis_run && (
-                    <button
-                      onClick={() => handleDecision(app.id, false)}
-                      className="bg-red-500 text-white px-3 py-1 rounded text-xs"
-                    >
-                      Reject
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+        {/* Applications Table */}
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden hover:shadow-xl transition-shadow duration-300">
+          <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100">
+            <h2 className="text-xl font-bold text-slate-800">Loan Applications</h2>
+            <p className="text-sm text-slate-500 mt-1">Review and process customer applications</p>
+          </div>
 
-function SummaryCard({ title, value, color }) {
-  return (
-    <div className={`p-4 text-white rounded-xl shadow ${color}`}>
-      <h3 className="text-sm uppercase">{title}</h3>
-      <p className="text-2xl font-bold">{value}</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-4">ID</th>
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Income</th>
+                  <th className="px-6 py-4">Loan Amount</th>
+                  <th className="px-6 py-4">Risk</th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {applications.map(app => (
+                  <tr key={app.id} className="hover:bg-slate-50 transition-colors duration-150">
+                    <td className="px-6 py-4 font-mono text-slate-700">#{app.id}</td>
+                    <td className="px-6 py-4">{app.full_name}</td>
+                    <td className="px-6 py-4">₹{app.monthly_income?.toLocaleString()}</td>
+                    <td className="px-6 py-4 font-semibold">₹{app.requested_loan_amount?.toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      {app.risk_label ? (
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                            app.risk_label === "Low"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : app.risk_label === "Medium"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {app.risk_label}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
+                        {!app.is_verified && (
+                          <button
+                            onClick={() => handleVerify(app.id)}
+                            className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                          >
+                            Verify
+                          </button>
+                        )}
+                        {app.is_verified && !app.analysis_run && (
+                          <button
+                            onClick={() => handleAnalyze(app.id)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                          >
+                            Analyze
+                          </button>
+                        )}
+                        {app.analysis_run && !app.approved && (
+                          <>
+                            <button
+                              onClick={() => handleDecision(app.id, true)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleDecision(app.id, false)}
+                              className="bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {app.approved && (
+                          <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-4 py-2 rounded-lg flex items-center">
+                            <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Approved
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
